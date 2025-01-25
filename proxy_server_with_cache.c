@@ -17,7 +17,7 @@
 
 typedef struct lru lru;
 #define MAX_CLIENTS 10
-
+#define MAX_BYTES 4096
 struct lru{
     char* data;
     int len;
@@ -25,6 +25,7 @@ struct lru{
     time_t lru_time;
     lru* next;
 };
+
 
 lru* find(char *url);
 int add_element(char *data,int len,char *url);
@@ -38,7 +39,62 @@ pthread_mutex_t lock;
 
 lru *head;
 int lru_size;
+void thread_fn(void *socketNew){
+    sem_wait(&sem);
+    int counter;
+    sem_getvalue(&sem,counter);
+    printf("Semaphore value is: %d",&counter);
+    int *t = (int *)socketNew;
+    int socket = *t;
 
+    int bytes_send_client,len;
+
+    char *buffer = (char *)calloc(MAX_BYTES,sizeof(char));
+    bzero(buffer,MAX_BYTES);
+    bytes_send_client = recv(socket,buffer,MAX_BYTES,0);
+
+    if(bytes_send_client<0){
+        perror("Some issue near the client while sending.");
+    }
+
+    while(bytes_send_client>0){
+        len = strlen(buffer);
+        if(strstr(buffer,"\r\n\r\n")==NULL){
+            bytes_send_client = recv(socket,buffer+len,MAX_BYTES-len,0);
+        }else{
+            break;
+        }
+    }
+
+    char *tempreq= (char *)malloc(strlen(buffer)*sizeof(char)+1);
+    for(int i=0;i<strlen(buffer);i++){
+        tempreq[i] = buffer[i];
+    }
+
+    struct lru* temp = find(tempreq);
+    if(temp!=NULL){
+        int size = temp->len/sizeof(char);
+        int pos = 0;
+        char response[MAX_BYTES];
+        while(pos<size){
+            bzero(response,MAX_BYTES);
+            for(int i=0;i<MAX_BYTES;i++){
+                response[i] = temp->data[i];
+                pos++;
+            }
+            send(socket,response,MAX_BYTES,0);
+        }
+        printf("Data Retrieved from the cache \n");
+        printf("%s\n",response);
+    }else if (bytes_send_client>0)
+    {
+        len = strlen(buffer);
+        ParsedRequest *req = ParsedRequest_create();
+
+        if()
+    }
+    
+}
 int main(int argc, char *argv[]){
     int client_socket_id,client_len;
     struct sockaddr_in server_addr,client_addr;
@@ -108,7 +164,8 @@ int main(int argc, char *argv[]){
         inet_ntop(AF_INET,&ip_addr,str,INET_ADDRSTRLEN);
         print("Client is connected with portNumber %d and ip address is %s\n",ntohs(client_addr.sin_port),str);
 
-        
-        return 0;
+        pthread_create(&tid [i],NULL,thread_fn,(void *)&connected_sockid[i]);
+        i++;
     }
+        return 0;
 }
